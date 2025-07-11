@@ -13,7 +13,20 @@ export class UserController {
   }
 
   @Post()
-  async createUser(@Body() body: { email: string; password: string }) {
-    return this.userService.createUser(body.email, body.password);
+  async createUser(
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      confiramtionToken: string;
+      confirmationTokenExpires: Date;
+    },
+  ) {
+    return this.userService.createUser(
+      body.email,
+      body.password,
+      body.confiramtionToken,
+      body.confirmationTokenExpires,
+    );
   }
 }

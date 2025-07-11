@@ -11,10 +11,20 @@ export class UserService {
     return this.prisma.user.findMany();
   }
 
-  async createUser(email: string, password: string) {
+  async createUser(
+    email: string,
+    password: string,
+    confirmationToken: string,
+    confirmationTokenExpires: Date,
+  ) {
     const hashedPassword = await bcrypt.hash(password, 10); // Hash du mot de passe avec un sel de 10
     return this.prisma.user.create({
-      data: { email, password: hashedPassword }, // Stockage du mot de passe hashé
+      data: {
+        email,
+        password: hashedPassword,
+        confirmationToken,
+        confirmationTokenExpires,
+      }, // Stockage du mot de passe hashé
     });
   }
 

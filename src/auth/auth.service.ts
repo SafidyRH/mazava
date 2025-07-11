@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { MailService } from '../mail/mail.service';
 import { UserService } from '../user/user.service';
@@ -13,41 +18,60 @@ export class AuthService {
     private readonly mailService: MailService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
-
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      throw new UnauthorizedException('Identifiants invalides');
+  async registerUser(email: string, password: string): Promise<void> {
+    const existingUser = await this.usersService.findByEmail(email);
+    if (existingUser) {
+      throw new ConflictException('Un utilisateur avec cet email existe déjà.');
     }
 
-    if (!user.isEmailConfirmed) {
-      throw new UnauthorizedException(
-        'Veuillez confirmer votre email avant de vous connecter',
-      );
-    }
+    const confirmationToken = uuidv4();
+    const tokenExpiration = new Date();
+    tokenExpiration.setHours(tokenExpiration.getHours() + 24); // Expiration en 24h
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: password_, ...result } = user;
-    return result;
-  }
+    await this.usersService.createUser(
+      email,
+      password,
+      confirmationToken,
+      tokenExpiration,
+    );
 
-  async registerUser(email: string): Promise<void> {
-    const token = uuidv4(); // Génère un token unique
-    await this.usersService.updateUserByEmail(email, {});
-    await this.mailService.sendConfirmationEmail(email, token);
+    await this.mailService.sendConfirmationEmail(email, confirmationToken);
   }
 
   async confirmEmail(token: string): Promise<boolean> {
     const user = await this.usersService.findByToken(token);
-    if (user) {
-      await this.usersService.updateUserById(user.id, {
-        isEmailConfirmed: true,
-        emailConfirmedAt: new Date(),
-        confirmationToken: null,
-      });
-      return true;
+    if (!user) {
+      throw new NotFoundException('Token invalide ou expiré.');
     }
-    return false;
+
+    if (user.confirmationTokenExpires < new Date()) {
+      throw new BadRequestException(
+        'Le token a expiré, veuillez vous réinscrire.',
+      );
+    }
+
+    await this.usersService.updateUserById(user.id, {
+      isEmailConfirmed: true,
+      emailConfirmedAt: new Date(),
+      confirmationToken: null,
+      confirmationTokenExpires: null,
+    });
+    return true;
+  }
+
+  async validateUser(email: string, password: string): Promise<any> {
+    const user = await this.usersService.findByEmail(email);
+    if (!user.isEmailConfirmed) {
+      throw new NotFoundException(
+        'Utilisateur non trouvé ou email non confirmé.',
+      );
+    }
+
+    const isPasswordMatching = await bcrypt.compare(password, user.password);
+    if (!isPasswordMatching) {
+      throw new BadRequestException('Mot de passe incorrect.');
+    }
+    return user;
   }
 
   async login(user: any) {

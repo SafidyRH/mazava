@@ -22,8 +22,10 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body('email') email: string): Promise<{ message: string }> {
-    await this.authService.registerUser(email);
+  async register(
+    @Body() body: { email: string; password: string },
+  ): Promise<{ message: string }> {
+    await this.authService.registerUser(body.email, body.password);
     return { message: 'Un e-mail de confirmation a été envoyé.' };
   }
 
